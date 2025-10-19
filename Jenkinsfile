@@ -2,13 +2,11 @@ pipeline {
     agent any
 
     environment {
-        PATH = "/Users/rajesh/.nvm/versions/node/v18.20.8/bin:$PATH"
-        // Supabase environment variables from Jenkins credentials
-        VITE_SUPABASE_URL = credentials('VITE_SUPABASE_URL')   
-        VITE_SUPABASE_ANON_KEY = credentials('VITE_SUPABASE_ANON_KEY') 
+        NODE_VERSION = "/Users/rajesh/.nvm/versions/node/v18.20.8/bin"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/balarajeshreddyceenepalli-boop/devtest.git'
@@ -17,20 +15,32 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'node -v'
-                sh 'npm -v'
-                sh 'npm install'
+                sh '''
+                    export PATH=$NODE_VERSION:$PATH
+                    node -v
+                    npm -v
+                    npm install
+                '''
             }
         }
 
-        stage('Clean & Build') {
+        stage('Build') {
             steps {
-                sh '''
-                    echo "Cleaning old build..."
-                    rm -rf dist
-                    echo "Building React app with Supabase env variables..."
-                    npm run build
-                '''
+                withCredentials([
+                    string(credentialsId: 'VITE_SUPABASE_URL', variable: 'VITE_SUPABASE_URL'),
+                    string(credentialsId: 'VITE_SUPABASE_ANON_KEY', variable: 'VITE_SUPABASE_ANON_KEY'),
+                    string(credentialsId: 'VITE_SUPABASE_SERVICE_ROLE_KEY', variable: 'VITE_SUPABASE_SERVICE_ROLE_KEY')
+                ]) {
+                    sh '''
+                        echo "Building React app with Supabase env variables..."
+                        # Create .env.production dynamically
+                        echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" > .env.production
+                        echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" >> .env.production
+                        echo "VITE_SUPABASE_SERVICE_ROLE_KEY=$VITE_SUPABASE_SERVICE_ROLE_KEY" >> .env.production
+
+                        npm run build
+                    '''
+                }
             }
         }
 
@@ -41,8 +51,8 @@ pipeline {
                         npx sonar-scanner \
                         -Dsonar.projectKey=devtest \
                         -Dsonar.sources=src \
-                        -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.token=$SONAR_AUTH_TOKEN
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.login=$SONAR_AUTH_TOKEN
                     '''
                 }
             }
@@ -51,23 +61,24 @@ pipeline {
         stage('Serve Application') {
             steps {
                 sh '''
-                    echo "Stopping any existing app..."
+                    # Kill any previous instance
                     pkill -f 'serve -s dist' || true
-                    echo "Starting app..."
-                    nohup serve -s dist -l 3000 > serve.log 2>&1 &
+                    # Serve on localhost:3000
+                    nohup npx serve -s dist -l 3000 &
+                    echo "✅ Application is live at http://localhost:3000"
                 '''
-                echo "✅ Application is live at http://localhost:3000"
-                sh 'open http://localhost:3000'
             }
         }
+
     }
 
     post {
         success {
-            echo "🎉 Build, Scan & Serve Successful!"
+            echo '🎉 Build, Scan & Serve Successful!'
+            sh 'open http://localhost:3000'
         }
         failure {
-            echo "❌ Build failed. Please check logs."
+            echo '❌ Build failed. Check logs above.'
         }
     }
 }
