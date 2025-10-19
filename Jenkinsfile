@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Use your system Node path
         PATH = "/Users/rajesh/.nvm/versions/node/v18.20.8/bin:$PATH"
     }
 
@@ -15,27 +14,34 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'node -v'
-                sh 'npm -v'
                 sh 'npm install'
             }
         }
 
         stage('Build') {
             steps {
-                sh 'npm run build'
+                // Inject Supabase credentials from Jenkins
+                withCredentials([
+                    string(credentialsId: 'SUPABASE_URL', variable: 'VITE_SUPABASE_URL'),
+                    string(credentialsId: 'SUPABASE_KEY', variable: 'VITE_SUPABASE_ANON_KEY')
+                ]) {
+                    sh '''
+                        echo "Building React app with Supabase env variables..."
+                        npm run build
+                    '''
+                }
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('MySonarQube') {   // Jenkins -> Configure System -> SonarQube servers
+                withSonarQubeEnv('MySonarQube') {
                     sh '''
                         npx sonar-scanner \
                         -Dsonar.projectKey=devtest \
                         -Dsonar.sources=src \
-                        -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.login=YOUR_SONAR_TOKEN
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.login=$SONAR_AUTH_TOKEN
                     '''
                 }
             }
@@ -43,10 +49,7 @@ pipeline {
 
         stage('Serve Application') {
             steps {
-                // Install "serve" globally (only runs if not installed)
-                sh 'npm install -g serve || true'
-
-                // Kill any existing serve process to avoid port conflicts
+                // Kill existing serve process to avoid port conflicts
                 sh "pkill -f 'serve -s dist' || true"
 
                 // Start app in background on port 3000
@@ -59,12 +62,12 @@ pipeline {
 
     post {
         success {
-            echo "🎉 Build & Deploy Successful!"
-            // Auto-open browser (Mac only)
+            echo "🎉 Build, Scan & Serve Successful!"
+            // Open app in browser (Mac only)
             sh 'open http://localhost:3000'
         }
         failure {
-            echo "❌ Build failed. Please check logs."
+            echo "❌ Pipeline failed. Check logs."
         }
     }
 }
