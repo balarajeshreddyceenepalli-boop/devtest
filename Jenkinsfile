@@ -3,6 +3,9 @@ pipeline {
 
     environment {
         PATH = "/Users/rajesh/.nvm/versions/node/v18.20.8/bin:$PATH"
+        // Supabase environment variables
+        VITE_SUPABASE_URL = credentials('VITE_SUPABASE_URL')   // Jenkins credential ID
+        VITE_SUPABASE_ANON_KEY = credentials('VITE_SUPABASE_ANON_KEY') // Jenkins credential ID
     }
 
     stages {
@@ -14,33 +17,34 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
+                sh 'node -v'
+                sh 'npm -v'
                 sh 'npm install'
             }
         }
 
-        stage('Build') {
+        stage('Clean & Build') {
             steps {
-                // Inject Supabase credentials from Jenkins
-                withCredentials([
-                    string(credentialsId: 'SUPABASE_URL', variable: 'VITE_SUPABASE_URL'),
-                    string(credentialsId: 'SUPABASE_KEY', variable: 'VITE_SUPABASE_ANON_KEY')
-                ]) {
-                    sh '''
-                        echo "Building React app with Supabase env variables..."
-                        npm run build
-                    '''
-                }
+                sh '''
+                    echo "Cleaning old build..."
+                    rm -rf dist
+                    echo "Building React app with Supabase env variables..."
+                    npm run build
+                '''
             }
         }
 
         stage('SonarQube Analysis') {
+            environment {
+                // Optional: SonarQube env
+            }
             steps {
                 withSonarQubeEnv('MySonarQube') {
                     sh '''
                         npx sonar-scanner \
                         -Dsonar.projectKey=devtest \
                         -Dsonar.sources=src \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.host.url=http://localhost:9000 \
                         -Dsonar.login=$SONAR_AUTH_TOKEN
                     '''
                 }
@@ -49,13 +53,14 @@ pipeline {
 
         stage('Serve Application') {
             steps {
-                // Kill existing serve process to avoid port conflicts
-                sh "pkill -f 'serve -s dist' || true"
-
-                // Start app in background on port 3000
-                sh 'nohup serve -s dist -l 3000 > serve.log 2>&1 &'
-
+                sh '''
+                    echo "Stopping any existing app..."
+                    pkill -f 'serve -s dist' || true
+                    echo "Starting app..."
+                    nohup serve -s dist -l 3000 > serve.log 2>&1 &
+                '''
                 echo "✅ Application is live at http://localhost:3000"
+                sh 'open http://localhost:3000'
             }
         }
     }
@@ -63,11 +68,9 @@ pipeline {
     post {
         success {
             echo "🎉 Build, Scan & Serve Successful!"
-            // Open app in browser (Mac only)
-            sh 'open http://localhost:3000'
         }
         failure {
-            echo "❌ Pipeline failed. Check logs."
+            echo "❌ Build failed. Please check logs."
         }
     }
 }
