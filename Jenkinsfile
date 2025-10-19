@@ -3,9 +3,9 @@ pipeline {
 
     environment {
         PATH = "/Users/rajesh/.nvm/versions/node/v18.20.8/bin:$PATH"
-        // Supabase environment variables
-        VITE_SUPABASE_URL = credentials('VITE_SUPABASE_URL')   // Jenkins credential ID
-        VITE_SUPABASE_ANON_KEY = credentials('VITE_SUPABASE_ANON_KEY') // Jenkins credential ID
+        // Supabase environment variables from Jenkins credentials
+        VITE_SUPABASE_URL = credentials('VITE_SUPABASE_URL')   
+        VITE_SUPABASE_ANON_KEY = credentials('VITE_SUPABASE_ANON_KEY') 
     }
 
     stages {
@@ -35,9 +35,6 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            environment {
-                // Optional: SonarQube env
-            }
             steps {
                 withSonarQubeEnv('MySonarQube') {
                     sh '''
@@ -45,7 +42,7 @@ pipeline {
                         -Dsonar.projectKey=devtest \
                         -Dsonar.sources=src \
                         -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.login=$SONAR_AUTH_TOKEN
+                        -Dsonar.token=$SONAR_AUTH_TOKEN
                     '''
                 }
             }
