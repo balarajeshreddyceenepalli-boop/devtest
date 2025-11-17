@@ -9,7 +9,7 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 checkout([$class: 'GitSCM', branches: [[name: '*/main']],
-                          userRemoteConfigs: [[url: 'https://github.com/balarajeshreddyceenepalli-boop/devtest.git']]])
+                          userRemoteConfigs: [[url: 'https://github.com/balarajeshreddyceenepalli-boop/bakeryupdated.git']]])
             }
         }
 
